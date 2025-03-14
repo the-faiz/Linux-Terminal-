@@ -1,0 +1,8 @@
+a.out
+input.txt
+kernel
+kernel.cpp
+output.txt
+sometextfile.txt
+test
+test.cpp
