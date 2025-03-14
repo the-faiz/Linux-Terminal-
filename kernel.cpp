@@ -64,6 +64,7 @@ void execute(vector<string>&args,int inpipe, int outpipe,bool background){
 
     string inputFilename="",outputFilename="";
     redirection(args,inputFilename,outputFilename);
+    
     vector<char*> c_args;
     for(auto& arg:args){
         c_args.push_back(&arg[0]);
