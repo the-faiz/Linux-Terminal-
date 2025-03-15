@@ -5,7 +5,27 @@
 #include<cstring>
 #include<vector>
 #include<fcntl.h>
+#include "kernel_utils.h"
 using namespace std;
+
+pid_t current_forground_process=-1;
+
+void signalHandler(int signum){
+    if(signum==SIGINT){
+        if(current_forground_process!=-1){
+            kill(current_forground_process,SIGKILL);
+            current_forground_process = -1;
+            cout<<"Process Interrupted. Returning to the shell"<<endl;
+        }
+    }
+    else if(signum == SIGTSTP && current_forground_process!=-1){
+        kill(current_forground_process,SIGSTOP);
+        setpgid(current_forground_process,current_forground_process); //detach the child process from the parent
+        kill(current_forground_process,SIGCONT);
+        current_forground_process = -1;
+        cout<<"Process moved to background"<<endl;
+    }
+}
 
 void get_args(string &command, vector<string>& args){
     string temp = "";
@@ -13,20 +33,20 @@ void get_args(string &command, vector<string>& args){
         if(command[i]==' '){
             while(i+1<command.size() && command[i+1]==' ') i++;
             if(temp!="")
-                args.push_back(temp);
+                handleWildCards(temp,args);
             temp = "";
             continue;
         }
         else if(command[i]=='>' || command[i]=='<' || command[i] == '|'){
             if(temp!="")
-                args.push_back(temp);
+                handleWildCards(temp,args);
             args.push_back(string(1,command[i]));
             temp = "";
             continue;
         }
         temp+=command[i];
     }
-    if(temp!="") args.push_back(temp);
+    if(temp!="") handleWildCards(temp,args);
     //for(auto x:args) cout<<x<<endl; --> checking all the arguments detected
 }
 
@@ -41,7 +61,7 @@ void redirection(vector<string> &args,string& inputFilename, string& outputFilen
     for(auto x:temp) args.push_back(x);
 }
 
-void handleInputOutputRedirection(int inpipe, int outpipe){
+void handleInputOutputRedirection(string& inputFilename, string& outputFilename,int inpipe, int outpipe){
     if(inputFilename!=""){
         int fd = open(inputFilename.c_str(),O_RDONLY);
         if(fd<0) {perror("can not open the file");return;}
@@ -60,11 +80,11 @@ void handleInputOutputRedirection(int inpipe, int outpipe){
         dup2(outpipe,STDOUT_FILENO);
 }
 
-void execute(vector<string>&args,int inpipe, int outpipe,bool background){
+void execute_external_command(vector<string>&args,int inpipe, int outpipe,bool background){
 
     string inputFilename="",outputFilename="";
     redirection(args,inputFilename,outputFilename);
-    
+
     vector<char*> c_args;
     for(auto& arg:args){
         c_args.push_back(&arg[0]);
@@ -79,20 +99,36 @@ void execute(vector<string>&args,int inpipe, int outpipe,bool background){
         execvp(c_args[0],c_args.data());
         cerr<<"execution failed"<<endl;
     }else if(!background){
-        wait(NULL);
+        current_forground_process = pid;
+        waitpid(pid,NULL, WUNTRACED); 
+        current_forground_process = -1;
         cout<<"Child proces executed successfully"<<endl;
     }
 }
 
+void execute_internal_command(){
+}
+
+void execute(vector<string>&args,int inpipe,int outpipe, bool background){
+    if(args[0]=="cd"){
+        change_directory(args);
+    }else if(args[0]=="exit"){
+        exit(0);
+    }
+    else{
+        execute_external_command(args,inpipe,outpipe,background);
+    }
+}
+
 void process(string &command){
-    get_args(command,args);
     vector<string> args;
+    get_args(command,args);
+    
     bool background = false;
     if(args.back()=="&") {background=true;args.pop_back();}
 
     vector<string> subcommand;
     int pipefd[2];
-    char buffer[1000];
 
     int inpipe = -1;
     for(int i=0;i<args.size();i++){
@@ -122,6 +158,8 @@ void process(string &command){
 }
 
 int main(){
+    signal(SIGINT,signalHandler);
+    signal(SIGTSTP,signalHandler);
     while(1){
         cout<<"Atif@kernel:~$";
         string command;
