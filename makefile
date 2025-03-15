@@ -2,7 +2,7 @@ CXX = g++
 
 CXXFLAGS = -std=c++20 -O2 -Wall
 
-SRC = kernel.cpp kernel_utils.cpp
+SRC = kernel.cpp kernel_utils.cpp history.cpp
 
 TARGET = kernel_program
 

@@ -6,6 +6,7 @@
 #include<vector>
 #include<fcntl.h>
 #include "kernel_utils.h"
+#include "history.h"
 using namespace std;
 
 pid_t current_forground_process=-1;
@@ -95,7 +96,6 @@ void execute_external_command(vector<string>&args,int inpipe, int outpipe,bool b
     if(pid<0){cerr<<"Fork failed"<<endl;return;}
     if(pid==0){
         handleInputOutputRedirection(inputFilename,outputFilename,inpipe,outpipe);
-        cout<<"executing"<<endl;
         execvp(c_args[0],c_args.data());
         cerr<<"execution failed"<<endl;
     }else if(!background){
@@ -161,10 +161,22 @@ int main(){
     signal(SIGINT,signalHandler);
     signal(SIGTSTP,signalHandler);
     while(1){
-        cout<<"Atif@kernel:~$";
-        string command;
-        getline(cin,command);
+        cout<<"Atif'sKernel:~$";cout.flush();
+        string command="";
+        while(true){
+            int ch = getch();
+            if(ch=='\n') break;
+            else if(ch==27) {get_history(command);}
+            else if (ch == 127){ //backspace
+                if(command.size()>0){
+                    cout << "\b \b";
+                    command.pop_back();
+                }
+            } 
+            else{cout<<char(ch);command+=ch;}
+        }
         process(command);
+        save_to_history(command);
         cout<<"Main---------------->Executed successfully"<<endl;
     }
     return 0;
